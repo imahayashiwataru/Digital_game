@@ -1,0 +1,1044 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>サンプリング・量子化・AD変換 体験ゲーム</title>
+  <style>
+    :root{
+      --bg:#0b0f14;
+      --panel:#101824;
+      --panel2:#0f1722;
+      --text:#e8eef7;
+      --muted:#9bb0c9;
+      --line:#1e2a3a;
+      --accent:#76c7ff;
+      --accent2:#ffb86b;
+      --accent3:#9bff8a;
+      --danger:#ff6b6b;
+    }
+    *{ box-sizing:border-box; }
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", Meiryo, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    header{
+      padding:12px 16px;
+      border-bottom:1px solid var(--line);
+      background: linear-gradient(180deg, #0f1722, #0b0f14);
+    }
+    header h1{
+      margin:0;
+      font-size:16px;
+      font-weight:700;
+      letter-spacing:0.2px;
+    }
+    header .sub{
+      margin-top:6px;
+      font-size:12px;
+      color: var(--muted);
+      line-height:1.35;
+    }
+    .wrap{
+      display:grid;
+      grid-template-columns: 1.65fr 1fr;
+      gap:12px;
+      padding:12px;
+      height: calc(100vh - 78px);
+      min-height:520px;
+    }
+    .card{
+      background: rgba(16,24,36,0.9);
+      border:1px solid var(--line);
+      border-radius:14px;
+      overflow:hidden;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+    }
+    .card .title{
+      padding:10px 12px;
+      font-size:13px;
+      color: var(--muted);
+      border-bottom:1px solid var(--line);
+      background: rgba(15,23,34,0.8);
+    }
+    #plotWrap{
+      position:relative;
+      height:100%;
+      padding:10px;
+    }
+    canvas{
+      width:100%;
+      height:100%;
+      display:block;
+      border-radius:10px;
+      background: radial-gradient(1400px 700px at 20% 10%, rgba(118,199,255,0.07), transparent 60%),
+                  radial-gradient(900px 500px at 80% 70%, rgba(155,255,138,0.06), transparent 55%),
+                  rgba(7,10,14,0.55);
+      border:1px solid rgba(30,42,58,0.8);
+    }
+    .legend{
+      position:absolute;
+      right:18px;
+      top:18px;
+      left:auto;
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      justify-content:flex-end;
+      font-size:12px;
+      color: var(--muted);
+      user-select:none;
+    }
+    .tag{
+      display:flex;
+      align-items:center;
+      gap:7px;
+      padding:6px 9px;
+      border:1px solid rgba(30,42,58,0.9);
+      border-radius:999px;
+      background: rgba(15,23,34,0.62);
+      backdrop-filter: blur(6px);
+    }
+    .dot{ width:10px; height:10px; border-radius:999px; }
+    .dot.a{ background: var(--accent); }
+    .dot.p{ background: var(--accent3); }
+    .dot.q{ background: var(--accent2); }
+    .dot.adc{ background: var(--danger); }
+
+    .panel{
+      height:100%;
+      overflow:auto;
+      padding:12px;
+    }
+    .grid{
+      display:grid;
+      gap:10px;
+    }
+    .group{
+      border:1px solid var(--line);
+      border-radius:12px;
+      background: rgba(15,23,34,0.55);
+      overflow:hidden;
+    }
+    .sigChoices{
+  display:grid;
+  grid-template-columns: 1fr;
+  gap:10px;
+}
+
+.sigCard{
+  display:block;
+  cursor:pointer;
+  user-select:none;
+}
+
+.sigCard input{
+  position:absolute;
+  opacity:0;
+  pointer-events:none;
+}
+
+.sigCardInner{
+  border:1px solid rgba(30,42,58,0.95);
+  background: rgba(7,10,14,0.25);
+  border-radius:12px;
+  padding:10px;
+  display:grid;
+  gap:6px;
+  transition: transform .06s ease, border-color .12s ease, background .12s ease;
+}
+
+.sigName{
+  font-size:13px;
+  color: var(--text);
+  font-weight:700;
+}
+
+.sigHint{
+  font-size:11px;
+  color: var(--muted);
+}
+
+.sigPreview{
+  width:100%;
+  height:42px;
+  border-radius:10px;
+  border:1px solid rgba(30,42,58,0.65);
+  background: rgba(15,23,34,0.35);
+}
+
+.sigPreview path{
+  fill:none;
+  stroke: rgba(118,199,255,0.9);
+  stroke-width:2.4;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+}
+
+.sigCard input:checked + .sigCardInner{
+  border-color: rgba(118,199,255,0.85);
+  background: rgba(118,199,255,0.10);
+}
+
+.sigCard:active .sigCardInner{
+  transform: translateY(1px);
+}
+    .group h2{
+      margin:0;
+      padding:10px 10px;
+      font-size:13px;
+      color: var(--text);
+      border-bottom:1px solid var(--line);
+      background: rgba(16,24,36,0.65);
+    }
+    .group .body{
+      padding:10px;
+      display:grid;
+      gap:10px;
+    }
+    label{
+      font-size:12px;
+      color: var(--muted);
+      display:block;
+      margin-bottom:6px;
+    }
+    .row{
+      display:grid;
+      grid-template-columns: 1fr 120px;
+      gap:8px;
+      align-items:center;
+    }
+    .row .val{
+      text-align:right;
+      font-variant-numeric: tabular-nums;
+      color: var(--text);
+      font-size:12px;
+      padding:6px 8px;
+      border:1px solid rgba(30,42,58,0.9);
+      border-radius:10px;
+      background: rgba(7,10,14,0.25);
+    }
+    input[type="range"]{ width:100%; }
+    select, input[type="number"], button{
+      width:100%;
+      padding:10px 10px;
+      border-radius:10px;
+      border:1px solid rgba(30,42,58,0.95);
+      background: rgba(7,10,14,0.4);
+      color: var(--text);
+      outline:none;
+      font-size:13px;
+    }
+    input[type="checkbox"]{ transform: scale(1.05); }
+    .inline{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      justify-content:space-between;
+    }
+    .btnRow{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:10px;
+    }
+    button{
+      cursor:pointer;
+      background: linear-gradient(180deg, rgba(118,199,255,0.14), rgba(118,199,255,0.05));
+    }
+    button.secondary{
+      background: linear-gradient(180deg, rgba(155,255,138,0.12), rgba(155,255,138,0.04));
+    }
+    button:active{ transform: translateY(1px); }
+    .note{
+      font-size:12px;
+      color: var(--muted);
+      line-height:1.45;
+      padding:10px;
+      border:1px dashed rgba(30,42,58,0.9);
+      border-radius:12px;
+      background: rgba(7,10,14,0.18);
+    }
+    .tiny{
+      font-size:11px;
+      color: var(--muted);
+      line-height:1.35;
+    }
+    .warn{
+      color: #ffcf88;
+    }
+    @media (max-width: 980px){
+      .wrap{ grid-template-columns: 1fr; height:auto; }
+      #plotWrap{ height: 56vh; min-height:360px; }
+    }
+  </style>
+</head>
+<body>
+<header>
+  <h1>サンプリング・量子化・AD変換 体験ゲーム（ブラウザ）</h1>
+  <div class="sub">
+    左：アナログ生波形（ノイズ付き）＋加工後（サンプリング→0次ホールド→量子化→ADCビット化）を同一グラフに表示／右：条件設定。電圧は 0–5 V にクリップ。
+  </div>
+</header>
+
+<div class="wrap">
+  <section class="card">
+    <div class="title">ゲーム画面（波形の可視化）</div>
+    <div id="plotWrap">
+      <div class="legend">
+        <div class="tag"><span class="dot a"></span>アナログ生データ（ノイズ含む）</div>
+        <div class="tag"><span class="dot p"></span>サンプリング＋0次ホールド</div>
+        <div class="tag"><span class="dot q"></span>量子化（任意Δ）</div>
+        <div class="tag"><span class="dot adc"></span>ADC量子化（N bit, 0–5V）</div>
+      </div>
+      <canvas id="cv"></canvas>
+    </div>
+  </section>
+
+  <aside class="card">
+    <div class="title">条件設定</div>
+    <div class="panel">
+      <div class="grid">
+
+        <div class="group">
+  <h2>信号表示 ON / OFF</h2>
+  <div class="body">
+    <div class="inline">
+      <div>
+        <label style="margin:0">アナログ生データ（ノイズ含む）</label>
+      </div>
+      <input id="showAnalog" type="checkbox" checked />
+    </div>
+
+    <div class="inline">
+      <div>
+        <label style="margin:0">サンプリング＋0次ホールド</label>
+      </div>
+      <input id="showZOH" type="checkbox" checked />
+    </div>
+
+    <div class="inline">
+      <div>
+        <label style="margin:0">量子化（任意Δ）</label>
+      </div>
+      <input id="showQuant" type="checkbox" checked />
+    </div>
+
+    <div class="inline">
+      <div>
+        <label style="margin:0">ADC量子化（N bit）</label>
+      </div>
+      <input id="showADC" type="checkbox" checked />
+    </div>
+
+    <div class="inline">
+      <div>
+        <label style="margin:0">サンプリング点（緑の点）</label>
+        <div class="tiny">点が多いと重くなるのでOFFも便利です</div>
+      </div>
+      <input id="showMarkers" type="checkbox" checked />
+    </div>
+  </div>
+</div>
+
+        <div class="group">
+          <h2>表示範囲</h2>
+          <div class="body">
+            <div>
+              <label>表示時間 [s]（横軸 0 → T）</label>
+              <div class="row">
+                <input id="tSpan" type="number" min="0.5" max="10" step="0.1" value="2.0" />
+                <div class="val">s</div>
+              </div>
+            </div>
+            <div class="tiny">縦軸は固定：0–5 V</div>
+          </div>
+        </div>
+
+        <div class="group">
+          <h2>生のアナログデータ（ベース信号）</h2>
+          <div class="body">
+            <div>
+<label>信号種類（クリックで選択）</label>
+
+<div class="sigChoices" id="sigChoices">
+  <label class="sigCard">
+    <input type="radio" name="sigType" value="dc" checked>
+    <div class="sigCardInner">
+      <div class="sigName">一定（DC）</div>
+      <svg class="sigPreview" viewBox="0 0 120 38" aria-hidden="true">
+        <path d="M6 19 L114 19" />
+      </svg>
+      <div class="sigHint">横線（一定値）</div>
+    </div>
+  </label>
+
+  <label class="sigCard">
+    <input type="radio" name="sigType" value="sine">
+    <div class="sigCardInner">
+      <div class="sigName">正弦波</div>
+      <svg class="sigPreview" viewBox="0 0 120 38" aria-hidden="true">
+        <path d="M6 19
+                 C 18 6, 30 6, 42 19
+                 C 54 32, 66 32, 78 19
+                 C 90 6, 102 6, 114 19" />
+      </svg>
+      <div class="sigHint">sin</div>
+    </div>
+  </label>
+
+  <label class="sigCard">
+    <input type="radio" name="sigType" value="sine2">
+    <div class="sigCardInner">
+      <div class="sigName">正弦波の重ね合わせ</div>
+      <svg class="sigPreview" viewBox="0 0 120 38" aria-hidden="true">
+        <path d="M6 19
+                 C 16 3, 28 11, 40 19
+                 C 52 27, 60 35, 72 19
+                 C 84 3, 96 11, 108 19
+                 C 112 21, 113 20, 114 19" />
+      </svg>
+      <div class="sigHint">sin + sin</div>
+    </div>
+  </label>
+</div>
+            </div>
+
+            <div id="dcBox">
+              <label>DC電圧 [V]</label>
+              <div class="row">
+                <input id="dcV" type="range" min="0" max="5" step="0.01" value="2.5" />
+                <div class="val" id="dcVVal"></div>
+              </div>
+            </div>
+
+            <div id="sineBox" style="display:none">
+              <div>
+                <label>オフセット [V]</label>
+                <div class="row">
+                  <input id="sineOff" type="range" min="0" max="5" step="0.01" value="2.5" />
+                  <div class="val" id="sineOffVal"></div>
+                </div>
+              </div>
+              <div>
+                <label>振幅 [V]（クリップ前）</label>
+                <div class="row">
+                  <input id="sineAmp" type="range" min="0" max="5" step="0.01" value="1.2" />
+                  <div class="val" id="sineAmpVal"></div>
+                </div>
+              </div>
+              <div>
+                <label>周波数 [Hz]</label>
+                <div class="row">
+                  <input id="sineF" type="range" min="0.1" max="20" step="0.1" value="3.0" />
+                  <div class="val" id="sineFVal"></div>
+                </div>
+              </div>
+            </div>
+
+            <div id="sine2Box" style="display:none">
+  <div class="note">
+    合成信号： V(t)= offset + A1 sin(2πf1 t + φ1) + A2 sin(2πf2 t + φ2)（最後に0–5Vへクリップ）
+  </div>
+
+  <div>
+    <label>第2正弦：振幅 A2 [V]</label>
+    <div class="row">
+      <input id="sine2Amp" type="range" min="0" max="5" step="0.01" value="0.6" />
+      <div class="val" id="sine2AmpVal"></div>
+    </div>
+  </div>
+
+  <div>
+    <label>第2正弦：周波数 f2 [Hz]</label>
+    <div class="row">
+      <input id="sine2F" type="range" min="0.1" max="20" step="0.1" value="8.0" />
+      <div class="val" id="sine2FVal"></div>
+    </div>
+  </div>
+
+  <div>
+    <label>第2正弦：位相 φ2 [deg]</label>
+    <div class="row">
+      <input id="sine2Ph" type="range" min="-180" max="180" step="1" value="0" />
+      <div class="val" id="sine2PhVal"></div>
+    </div>
+  </div>
+</div>
+
+            <div class="note">
+              ベース信号 + ノイズ → 0–5 V にクリップして「アナログ生データ」として描画します。
+            </div>
+          </div>
+        </div>
+
+        <div class="group">
+          <h2>ノイズ（生データに加算）</h2>
+          <div class="body">
+            <div>
+              <label>ノイズ種類</label>
+              <select id="noiseType">
+                <option value="none">なし</option>
+                <option value="gauss">正規分布（Gaussian）</option>
+              </select>
+            </div>
+
+            <div id="gaussBox">
+              <div>
+                <label>標準偏差 σ [V]</label>
+                <div class="row">
+                  <input id="noiseSigma" type="range" min="0" max="1.5" step="0.01" value="0.15" />
+                  <div class="val" id="noiseSigmaVal"></div>
+                </div>
+              </div>
+              <div class="inline">
+                <div>
+                  <label style="margin:0">振幅（σ）を毎回ランダム化</label>
+                  <div class="tiny">ON: ノイズ再生成のたびに σ が 0〜設定値でランダム</div>
+                </div>
+                <input id="sigmaRandom" type="checkbox" />
+              </div>
+            </div>
+
+            <div class="btnRow">
+              <button id="regen">ノイズ再生成</button>
+              <button class="secondary" id="reset">初期化</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="group">
+          <h2>サンプリング（加工データ）</h2>
+          <div class="body">
+            <div>
+              <label>サンプリング時間 Ts [s]</label>
+              <div class="row">
+                <input id="Ts" type="range" min="0.005" max="0.5" step="0.005" value="0.05" />
+                <div class="val" id="TsVal"></div>
+              </div>
+              <div class="tiny">補間（再構成）は 0次ホールド（ZOH）固定</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="group">
+          <h2>量子化（任意 Δ）</h2>
+          <div class="body">
+            <div>
+              <label>量子化幅 Δ [V]（0–5V の範囲で丸め）</label>
+              <div class="row">
+                <!-- ✅修正：量子化幅Δは 0.25V 刻み -->
+                <input id="qStep" type="range" min="0.25" max="5.0" step="0.25" value="0.25" />
+                <div class="val" id="qStepVal"></div>
+              </div>
+              <div class="tiny">「サンプリング→ZOH」後に、Δ刻みで四捨五入します</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="group">
+          <h2>AD変換（N bit, 0–5V）</h2>
+          <div class="body">
+            <div>
+              <label>ADCビット数</label>
+              <select id="adcBits">
+                <option value="8">8 bit</option>
+                <option value="10" selected>10 bit</option>
+                <option value="12">12 bit</option>
+                <option value="16">16 bit</option>
+              </select>
+            </div>
+            <div class="note">
+              ADCは 0–5V を <b>0〜(2^N−1)</b> のコードに変換し、再び電圧に戻して描画します。<br/>
+              <span class="tiny warn">※「量子化（任意Δ）」と「ADC量子化」は別工程として両方適用しています。</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="group">
+          <h2>表示情報</h2>
+          <div class="body">
+            <div class="tiny" id="info"></div>
+          </div>
+        </div>
+        <div class="group">
+  <h2>データ出力（Excel/CSV）</h2>
+  <div class="body">
+    <button id="dlCsv">波形データをCSVでダウンロード</button>
+    <div class="tiny">
+      CSVはExcelで開けます（列：t, analog, zoh, quant, adc）。
+    </div>
+  </div>
+</div>
+
+      </div>
+    </div>
+  </aside>
+</div>
+
+<script>
+(() => {
+  // ====== Utilities ======
+  const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+  const lerp  = (a, b, t) => a + (b - a) * t;
+
+  // Gaussian RNG: Box-Muller
+  function randn() {
+    let u = 0, v = 0;
+    while (u === 0) u = Math.random();
+    while (v === 0) v = Math.random();
+    return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+  }
+
+  // ====== DOM ======
+  const cv = document.getElementById('cv');
+  const ctx = cv.getContext('2d');
+
+  const el = (id) => document.getElementById(id);
+
+  const tSpan = el('tSpan');
+  const sigTypeRadios = () => Array.from(document.querySelectorAll('input[name="sigType"]'));
+  const getSigType = () => (sigTypeRadios().find(r => r.checked)?.value || 'dc');
+
+  const dcV = el('dcV');
+  const sineOff = el('sineOff');
+  const sineAmp = el('sineAmp');
+  const sineF = el('sineF');
+
+  const noiseType = el('noiseType');
+  const noiseSigma = el('noiseSigma');
+  const sigmaRandom = el('sigmaRandom');
+
+  const Ts = el('Ts');
+  const qStep = el('qStep');
+  const adcBits = el('adcBits');
+
+  const regenBtn = el('regen');
+  const resetBtn = el('reset');
+  const info = el('info');
+
+  const dcBox = el('dcBox');
+  const sineBox = el('sineBox');
+  const gaussBox = el('gaussBox');
+
+  const sine2Box = el('sine2Box');
+const sine2Amp = el('sine2Amp');
+const sine2F   = el('sine2F');
+const sine2Ph  = el('sine2Ph');
+
+const showAnalog  = el('showAnalog');
+const showZOH     = el('showZOH');
+const showQuant   = el('showQuant');
+const showADC     = el('showADC');
+const showMarkers = el('showMarkers');
+
+const dlCsv = el('dlCsv');
+
+  // Value labels
+  const setVal = (id, txt) => el(id).textContent = txt;
+  function syncLabels(){
+    
+    setVal('dcVVal', `${Number(dcV.value).toFixed(2)} V`);
+    setVal('sineOffVal', `${Number(sineOff.value).toFixed(2)} V`);
+    setVal('sineAmpVal', `${Number(sineAmp.value).toFixed(2)} V`);
+    setVal('sineFVal', `${Number(sineF.value).toFixed(1)} Hz`);
+    setVal('noiseSigmaVal', `${Number(noiseSigma.value).toFixed(2)} V`);
+    setVal('TsVal', `${Number(Ts.value).toFixed(3)} s`);
+    setVal('qStepVal', `${Number(qStep.value).toFixed(2)} V`);
+    setVal('sine2AmpVal', `${Number(sine2Amp.value).toFixed(2)} V`);
+    setVal('sine2FVal',   `${Number(sine2F.value).toFixed(1)} Hz`);
+    setVal('sine2PhVal',  `${Number(sine2Ph.value).toFixed(0)} deg`);
+  }
+
+  // ====== State ======
+  let noiseSeed = 0; // just to re-generate deterministic-like sequences per click (we still use Math.random)
+  let cachedNoise = null; // dense noise samples on grid
+
+  function currentSigma(){
+    if (noiseType.value !== 'gauss') return 0;
+    const s = Number(noiseSigma.value);
+    if (!sigmaRandom.checked) return s;
+    return Math.random() * s;
+  }
+
+function baseSignal(t){
+  const type = getSigType();
+  if (type === 'dc'){
+    return Number(dcV.value);
+  }
+
+  // 共通（正弦系）
+  const off = Number(sineOff.value);
+  const a1  = Number(sineAmp.value);
+  const f1  = Number(sineF.value);
+  const s1  = a1 * Math.sin(2*Math.PI*f1*t); // φ1=0固定
+
+  if (type === 'sine'){
+    return off + s1;
+  }
+
+  // type === 'sine2' : 重ね合わせ
+  const a2 = Number(sine2Amp.value);
+  const f2 = Number(sine2F.value);
+  const ph2= Number(sine2Ph.value) * Math.PI / 180.0;
+  const s2 = a2 * Math.sin(2*Math.PI*f2*t + ph2);
+
+  return off + s1 + s2;
+}
+
+  // ====== Pipeline ======
+  function makeData(){
+    let T = Number(tSpan.value);
+    T = clamp(T, 0.5, 10);      // min/max と合わせる
+    tSpan.value = T;            // 入力欄にも反映（任意）
+    const vMin = 0, vMax = 5;
+
+    // Dense grid for "analog" rendering
+    const denseN = 2000; // enough for smooth curves
+    const dtDense = T / (denseN - 1);
+
+    // Noise generation on dense grid
+    const sigma = currentSigma();
+    const noiseArr = new Array(denseN);
+    for (let i = 0; i < denseN; i++){
+      let n = 0;
+      if (noiseType.value === 'gauss'){
+        n = randn() * sigma;
+      }
+      noiseArr[i] = n;
+    }
+
+    // Analog signal (clipped)
+    const analog = new Array(denseN);
+    const tDense = new Array(denseN);
+    for (let i = 0; i < denseN; i++){
+      const t = i * dtDense;
+      tDense[i] = t;
+      const v = baseSignal(t) + noiseArr[i];
+      analog[i] = clamp(v, vMin, vMax);
+    }
+
+    // Sampling times
+    const TsVal = Math.max(0.0005, Number(Ts.value));
+    const nSamp = Math.floor(T / TsVal) + 1;
+    const tS = new Array(nSamp);
+    const yS = new Array(nSamp); // sampled values from analog (nearest dense)
+    for (let k = 0; k < nSamp; k++){
+      const t = k * TsVal;
+      tS[k] = t;
+      const idx = Math.round(t / dtDense);
+      const i = clamp(idx, 0, denseN - 1);
+      yS[k] = analog[i];
+    }
+
+    // ZOH reconstruction on dense grid (from sampled yS)
+    const zoh = new Array(denseN);
+    let k = 0;
+    for (let i = 0; i < denseN; i++){
+      const t = tDense[i];
+      while (k + 1 < nSamp && t >= tS[k + 1]) k++;
+      zoh[i] = yS[k];
+    }
+
+    // Quantization by arbitrary step Δ (applied to ZOH)
+    // ✅修正：量子化幅Δは 0.25V 刻みに固定（スナップ）
+    let dq = Number(qStep.value);
+    dq = clamp(dq, 0.25, 5.0);                 // min/max と合わせる
+    dq = Math.round(dq / 0.25) * 0.25;          // 0.25 刻みに丸める
+    qStep.value = dq;                           // UIにも反映（任意）
+    const quant = new Array(denseN);
+    for (let i = 0; i < denseN; i++){
+      const v = zoh[i];
+      const q = Math.round(v / dq) * dq;
+      quant[i] = clamp(q, vMin, vMax);
+    }
+
+    // ADC quantization (N-bit) on top of quant[]
+    const Nbit = Number(adcBits.value);
+    const levels = Math.pow(2, Nbit);
+    const maxCode = levels - 1;
+    const adc = new Array(denseN);
+    for (let i = 0; i < denseN; i++){
+      const v = quant[i];
+      const code = Math.round((v - vMin) / (vMax - vMin) * maxCode);
+      const vrec = vMin + (code / maxCode) * (vMax - vMin);
+      adc[i] = clamp(vrec, vMin, vMax);
+    }
+
+    // Info
+    const lsb = (vMax - vMin) / (Math.pow(2, Nbit) - 1);
+    return {
+      T, vMin, vMax,
+      denseN, tDense, analog,
+      zoh, quant, adc,
+      TsVal, nSamp,
+      dq, Nbit, lsb, sigma
+    };
+  }
+
+  function downloadCSV(filename, rows){
+  const csv = rows.map(r => r.map(v => {
+    // Excelで崩れにくいように（改行・カンマ対策）
+    const s = String(v);
+    return (s.includes(',') || s.includes('"') || s.includes('\n'))
+      ? `"${s.replaceAll('"','""')}"`
+      : s;
+  }).join(',')).join('\r\n');
+
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+
+  URL.revokeObjectURL(url);
+}
+
+  // ====== Plotting ======
+  function resizeCanvas(){
+    const rect = cv.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    cv.width = Math.round(rect.width * dpr);
+    cv.height = Math.round(rect.height * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // draw in CSS pixels
+  }
+
+  function drawAxes(g){
+    const {T, vMin, vMax} = g;
+    const W = cv.getBoundingClientRect().width;
+    const H = cv.getBoundingClientRect().height;
+
+    // Plot area
+    const padL = 56, padR = 16, padT = 18, padB = 50;
+    const x0 = padL, y0 = padT;
+    const x1 = W - padR, y1 = H - padB;
+
+    // Background grid
+    ctx.clearRect(0,0,W,H);
+
+    // Border
+    ctx.strokeStyle = 
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x0, y0, x1-x0, y1-y0);
+
+    // Grid lines
+    const nx = 10;
+    const ny = 10;
+    ctx.strokeStyle = "rgba(120,140,170,0.35)"; // 目立つ色に
+    ctx.lineWidth = 1.25;                       // 少し太く
+
+    for (let i=1;i<nx;i++){
+      const x = lerp(x0, x1, i/nx);
+      ctx.beginPath(); ctx.moveTo(x,y0); ctx.lineTo(x,y1); ctx.stroke();
+    }
+    for (let j=1;j<ny;j++){
+      const y = lerp(y0, y1, j/ny);
+      ctx.beginPath(); ctx.moveTo(x0,y); ctx.lineTo(x1,y); ctx.stroke();
+    }
+
+    // Axis labels & ticks
+    ctx.fillStyle = "rgba(232,238,247,0.92)";
+    ctx.font = "16px ui-sans-serif, system-ui";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+
+    // x ticks
+    for (let i=0;i<=nx;i++){
+      const t = (T * i/nx);
+      const x = lerp(x0, x1, i/nx);
+      ctx.fillStyle = "rgba(155,176,201,0.95)";
+      ctx.fillText(t.toFixed(2), x, y1 + 10);
+    }
+    ctx.fillStyle = "rgba(155,176,201,0.95)";
+    ctx.fillText("時間 t [s]", (x0+x1)/2, y1 + 26);
+
+    // y ticks
+    ctx.textAlign = "right";
+    ctx.textBaseline = "middle";
+    for (let j=0;j<=ny;j++){
+      const v = lerp(vMax, vMin, j/ny);
+      const y = lerp(y0, y1, j/ny);
+      ctx.fillStyle = "rgba(155,176,201,0.95)";
+      ctx.fillText(v.toFixed(1), x0 - 8, y);
+    }
+    // y label
+    ctx.save();
+    ctx.translate(16, (y0+y1)/2);
+    ctx.rotate(-Math.PI/2);
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    ctx.fillStyle = "rgba(155,176,201,0.95)";
+    ctx.fillText("電圧 V [V]（0–5）", 0, -10);
+    ctx.restore();
+
+    // Mapper
+    const xMap = (t) => lerp(x0, x1, t / T);
+    const yMap = (v) => lerp(y1, y0, (v - vMin) / (vMax - vMin));
+
+    return {x0,y0,x1,y1,xMap,yMap};
+  }
+
+  function drawLine(xMap, yMap, tArr, yArr, color, width=2){
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.beginPath();
+    for (let i=0;i<tArr.length;i++){
+      const x = xMap(tArr[i]);
+      const y = yMap(yArr[i]);
+      if (i===0) ctx.moveTo(x,y);
+      else ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+  }
+
+  function draw(){
+    resizeCanvas();
+    const g = makeData();
+    const {xMap, yMap, x0,x1,y0,y1} = drawAxes(g);
+
+    // Colors (matching legend)
+    const cAnalog = "rgba(118,199,255,0.95)";
+    const cZoh    = "rgba(155,255,138,0.90)";
+    const cQuant  = "rgba(255,184,107,0.92)";
+    const cAdc    = "rgba(255,107,107,0.92)";
+
+if (showAnalog.checked) drawLine(xMap, yMap, g.tDense, g.analog, cAnalog, 3.5);
+if (showZOH.checked)    drawLine(xMap, yMap, g.tDense, g.zoh,    cZoh,    3.5);
+if (showQuant.checked)  drawLine(xMap, yMap, g.tDense, g.quant,  cQuant,  3.5);
+if (showADC.checked)    drawLine(xMap, yMap, g.tDense, g.adc,    cAdc,    3.5);
+
+    // Sampling markers (on ZOH)
+    ctx.fillStyle = "rgba(155,255,138,0.9)";
+    for (let k=0;k<g.nSamp;k++){
+      const x = xMap(k * g.TsVal);
+      const y = yMap(g.zoh[Math.round((k*g.TsVal/g.T)*(g.denseN-1))]);
+      ctx.beginPath();
+      if (showMarkers.checked) {
+  ctx.fillStyle = "rgba(155,255,138,0.9)";
+  for (let k=0;k<g.nSamp;k++){
+    const x = xMap(k * g.TsVal);
+    const y = yMap(g.zoh[Math.round((k*g.TsVal/g.T)*(g.denseN-1))]);
+    ctx.beginPath();
+    ctx.arc(x, y, 7, 0, Math.PI*2);
+    ctx.fill();
+  }
+}
+      
+      ctx.fill();
+    }
+
+    // Info text
+    info.innerHTML =
+      `表示時間 T = <b>${g.T.toFixed(2)} s</b><br/>` +
+      `サンプリング Ts = <b>${g.TsVal.toFixed(3)} s</b> → サンプル数 ≈ <b>${g.nSamp}</b><br/>` +
+      `ノイズ σ = <b>${g.sigma.toFixed(3)} V</b>（正規分布）<br/>` +
+      `量子化幅 Δ = <b>${g.dq.toFixed(3)} V</b><br/>` +
+      `ADC = <b>${g.Nbit} bit</b>（0–5V） / LSB ≈ <b>${g.lsb.toFixed(6)} V</b>`;
+  }
+
+  // ====== UI wiring ======
+  function updateVisibility(){
+    const t = getSigType();
+    dcBox.style.display   = (t === 'dc') ? '' : 'none';
+    sineBox.style.display = (t === 'sine' || t === 'sine2') ? '' : 'none';
+    sine2Box.style.display= (t === 'sine2') ? '' : 'none';
+
+    gaussBox.style.display = (noiseType.value === 'gauss') ? '' : 'none';
+  }
+
+  function bindAll(){
+    const inputs = [
+  tSpan, dcV, sineOff, sineAmp, sineF,
+  noiseType, noiseSigma, sigmaRandom,
+  Ts, qStep, adcBits,
+  sine2Amp, sine2F, sine2Ph,
+  showAnalog, showZOH, showQuant, showADC, showMarkers
+];
+sigTypeRadios().forEach(r => {
+  r.addEventListener('change', () => {
+    syncLabels();
+    updateVisibility();
+    draw();
+  });
+});
+    inputs.forEach(x => x.addEventListener('input', () => {
+      syncLabels();
+      updateVisibility();
+      draw();
+    }));
+    inputs.forEach(x => x.addEventListener('change', () => {
+      syncLabels();
+      updateVisibility();
+      draw();
+    }));
+
+    regenBtn.addEventListener('click', () => {
+      noiseSeed++;
+      draw();
+    });
+
+    resetBtn.addEventListener('click', () => {
+      tSpan.value = 2.0;
+      sigTypeRadios().forEach(r => r.checked = (r.value === 'sine'));
+      sineOff.value = 2.5;
+      sineAmp.value = 1.2;
+      sineF.value = 3.0;
+      dcV.value = 2.5;
+
+      noiseType.value = "gauss";
+      noiseSigma.value = 0.15;
+      sigmaRandom.checked = false;
+
+      Ts.value = 0.05;
+      qStep.value = 0.05;
+      adcBits.value = "10";
+
+      syncLabels();
+      updateVisibility();
+      draw();
+    });
+
+    dlCsv.addEventListener('click', () => {
+  const g = makeData();
+
+  // ヘッダ行
+  const rows = [
+    ['t[s]', 'analog[V]', 'zoh[V]', 'quant[V]', 'adc[V]']
+  ];
+
+  // dense grid（描画に使ってる2000点）をそのまま出力
+  for (let i = 0; i < g.denseN; i++){
+    rows.push([
+      g.tDense[i].toFixed(6),
+      g.analog[i].toFixed(6),
+      g.zoh[i].toFixed(6),
+      g.quant[i].toFixed(6),
+      g.adc[i].toFixed(6),
+    ]);
+  }
+
+  const ts = new Date();
+  const stamp =
+    `${ts.getFullYear()}${String(ts.getMonth()+1).padStart(2,'0')}${String(ts.getDate()).padStart(2,'0')}_` +
+    `${String(ts.getHours()).padStart(2,'0')}${String(ts.getMinutes()).padStart(2,'0')}${String(ts.getSeconds()).padStart(2,'0')}`;
+
+  downloadCSV(`waveforms_${stamp}.csv`, rows);
+});
+
+    window.addEventListener('resize', () => draw());
+  }
+
+  // Init
+  syncLabels();
+  updateVisibility();
+  bindAll();
+  draw();
+})();
+</script>
+</body>
+</html>
